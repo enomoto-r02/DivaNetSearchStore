@@ -1,0 +1,83 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Text;
+
+namespace DivaNetSearchStore
+{
+    public class Store
+    {
+        public static string header { get; set; }
+
+        // 区切り文字
+        private readonly string SEPALATOR = ",";
+
+        // No
+        public int no { get; set; }
+
+        // 店舗名
+        public string name { get; set; }
+
+        // 地域
+        public string tiiki { get; set; }
+
+        // 都道府県
+        public string todofuken { get; set; }
+
+        // フォトスタジオ
+        public string photoStudio { get; set; }
+
+        // 営業時間_開始
+        public string openTime { get; set; }
+
+        // 営業時間_終了
+        public string closeTime { get; set; }
+
+        // 最寄駅
+        public string nearestStation { get; set; }
+
+        // 住所
+        public string address { get; set; }
+
+        // 設置台数
+        public int daisu { get; set; }
+
+        // 店舗からのPR
+        public string pr { get; set; }
+
+        // 取得日
+        public DateTime updateDate { get; set; }
+
+        /*
+         * コンストラクタ＠DIVA.NET接続時
+         */
+        public Store()
+        {
+            header = "店舗名,地域,都道府県,台数,フォトスタジオ,開店時刻,閉店時刻,住所,最寄駅,PR\n";
+        }
+
+        /*
+         * 書き込み用
+         */
+        public override string ToString()
+        {
+            StringBuilder ret = new StringBuilder();
+
+            //ret.Append(no + SEPALATOR);
+            ret.Append(name + SEPALATOR);
+            ret.Append(tiiki + SEPALATOR);
+            ret.Append(todofuken + SEPALATOR);
+            ret.Append(daisu + SEPALATOR);
+            ret.Append(photoStudio + SEPALATOR);
+            ret.Append(openTime + SEPALATOR);
+            ret.Append(closeTime + SEPALATOR);
+            ret.Append(address + SEPALATOR);
+            ret.Append(nearestStation + SEPALATOR);
+            ret.Append(pr + SEPALATOR);
+            //ret.Append(updateDate + SEPALATOR);
+
+            ret.Append("\n");
+
+            return ret.ToString();
+        }
+    }
+}

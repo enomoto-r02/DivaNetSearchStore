@@ -1,0 +1,189 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Windows.Forms;
+
+namespace DivaNetSearchStore
+{
+    public static class StoreManager
+    {
+        static readonly string FILE_STORE = "store_{0}{1}.csv";
+
+        static readonly string URL_TIIKI = "http://project-diva-ac.net/divanet/arcade/selectPrefecture/";
+        static readonly string URL_TODOFUKEN = "http://project-diva-ac.net/divanet/arcade/search/";
+        static readonly string URL_TEMPO = "http://project-diva-ac.net/divanet/arcade/information/";
+
+        static readonly string VALUE_ADDRESS_URL_STR = "地図表示";
+
+        /*
+         * 店舗情報を取得する
+         */
+        public static Dictionary<int, Store> GetStore(Setting setting, DateTime dt)
+        {
+            Dictionary<int, Store> stores = new Dictionary<int, Store>();
+
+            // 店舗検索ページからURLと文字列を取得
+            string[] res = WebUtil.HttpPost("http://project-diva-ac.net/divanet/arcade/", setting);
+            Dictionary<string, string> tiikiUrls = new Dictionary<string, string>();
+            WebUtil.getLinkUrlStrOnePage(ref tiikiUrls, res[1], URL_TIIKI);
+
+            // 都道府県単位
+            foreach (string tiikiUrl in tiikiUrls.Keys)
+            {
+                Console.WriteLine(string.Format("{0} - 処理中", tiikiUrls[tiikiUrl]));
+
+                // 都道府県単位
+                res = WebUtil.HttpPost(tiikiUrl, setting);
+                Dictionary<string, string> todofukenUrls = new Dictionary<string, string>();
+                WebUtil.getLinkUrlStrOnePage(ref todofukenUrls, res[1], URL_TODOFUKEN);
+
+                foreach (string todofukenUrl in todofukenUrls.Keys)
+                {
+                    string tiikiMei = tiikiUrls[tiikiUrl];
+                    string todofukenMei = todofukenUrls[todofukenUrl];
+
+                    Console.WriteLine(string.Format("{0} - {1} - 処理中", tiikiMei, todofukenMei));
+
+                    //if (!todofukenMei.Contains("東京都"))
+                    //{
+                    //    continue;
+                    //}
+
+                    // 店舗単位(都道府県単位)
+                    res = WebUtil.HttpPost(todofukenUrl, setting);
+
+                    Dictionary<string, string> tempoUrls = new Dictionary<string, string>();
+                    WebUtil.getLinkUrlStrAllPage(setting, ref tempoUrls, res[1], URL_TEMPO);
+
+                    foreach(string tempoUrl in tempoUrls.Keys)
+                    {
+                        string tempoMei = WebUtil.replaceUtf8(tempoUrls[tempoUrl]);
+
+                        Console.WriteLine(string.Format("{0} - {1} - {2} - 処理中", tiikiMei, todofukenMei, tempoMei));
+
+                        Store store = new Store();
+                        store.no = stores.Count + 1;
+                        store.name = tempoMei;
+                        store.tiiki = tiikiMei;
+                        store.todofuken = todofukenMei;
+                        store.updateDate = dt;
+
+                        GetStoreDetail(setting, tempoUrl, ref store);
+
+                        stores.Add(store.no, store);
+                    }
+                }
+            }
+
+            return stores;
+        }
+
+        /*
+         * 店舗情報を取得する(詳細)
+         */
+        public static void GetStoreDetail(Setting setting, string url, ref Store store)
+        {
+            // 店舗単位(市区町村単位)
+            string[] res = WebUtil.HttpPost(url, setting);
+            HtmlDocument html = WebUtil.getHtmlDocument(res[1]);
+
+            HtmlElement body = html.GetElementsByTagName("body")[0];
+            string[] innerTexts = WebUtil.getInnerTextReplace(body.InnerText);
+
+            // 要素ごとに振り分け
+            Dictionary<string, List<string>> innerElems = WebUtil.getDivaNetKomoku(innerTexts);
+
+            foreach (string elem in innerElems.Keys)
+            {
+                List<string> elemValues = innerElems[elem];
+                string elemValueStr = string.Join("", elemValues.ToArray());
+
+                if (elem.Contains("[設置台数]"))
+                {
+                    store.daisu = int.Parse(elemValues[1].Replace("台", "").Trim());
+                }
+                if (elem.Contains("[フォトスタジオ]"))
+                {
+                    store.photoStudio = elemValues[1].Trim();
+                }
+                if (elem.Contains("[店舗からのPR]"))
+                {
+                    // 改行は結合する
+                    for(int i=1; i<elemValues.Count; i++)
+                    {
+                        store.pr += WebUtil.replaceUtf8(elemValues[i].Trim());
+                    }
+                }
+                if (elem.Contains("[営業時間]"))
+                {
+                    string[] tmpArray = elemValues[1].Split('～');
+                    if (tmpArray.Length == 2)
+                    {
+                        store.openTime = tmpArray[0].Trim();
+                        store.closeTime = tmpArray[1].Trim();
+                    }
+                }
+                if (elem.Contains("[最寄駅]"))
+                {
+                    // 改行は結合する
+                    for (int i = 1; i < elemValues.Count; i++)
+                    {
+                        store.nearestStation += WebUtil.replaceUtf8(elemValues[i].Trim());
+                    }
+                }
+                if (elem.Contains("[住所]"))
+                {
+                    // 改行は結合する
+                    for (int i = 1; i < elemValues.Count; i++)
+                    {
+                        if (!elemValues[i].Trim().StartsWith(VALUE_ADDRESS_URL_STR) && !elemValues[i].Contains("店舗検索"))
+                        {
+                            store.address += WebUtil.replaceUtf8Address(elemValues[i].Trim());
+                        }
+                    }
+                }
+            }
+        }
+
+        /*
+         * 書き込み
+         */
+        public static void WriteStore(Dictionary<int, Store> stores, DateTime dt, string suffix)
+        {
+            StringBuilder buf = new StringBuilder();
+            buf.Append(Store.header);
+
+            foreach (int key in stores.Keys)
+            {
+                buf.Append(stores[key].ToString());
+            }
+
+            FileUtil.writeFile(
+                buf.ToString(),
+                string.Format(FILE_STORE, dt.ToString("yyyyMMdd_HHmm"), suffix),
+                false
+            );
+        }
+
+        /*
+         * 店舗情報を取得する(詳細)
+         */
+        public static Dictionary<int, Store> GetStorePhotoStudio(Dictionary<int, Store> stores)
+        {
+            Dictionary<int, Store> ret = new Dictionary<int, Store>();
+
+            foreach(int key in stores.Keys)
+            {
+                Store store = stores[key];
+
+                if(store.photoStudio.Equals("有"))
+                {
+                    ret.Add(key, store);
+                }
+            }
+
+            return ret;
+        }
+    }
+}
